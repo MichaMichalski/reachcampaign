@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticateApi, jsonResponse, errorResponse } from "@/lib/api-auth";
-import { campaignQueue } from "@/lib/queue";
+import { getCampaignQueue } from "@/lib/queue";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -31,8 +31,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       data: { status: "SKIPPED" },
     });
 
-    const waiting = await campaignQueue.getWaiting();
-    const delayed = await campaignQueue.getDelayed();
+    const queue = getCampaignQueue();
+    const waiting = await queue.getWaiting();
+    const delayed = await queue.getDelayed();
     const campaignJobs = [...waiting, ...delayed].filter(
       (j) => j.data?.campaignId === id
     );

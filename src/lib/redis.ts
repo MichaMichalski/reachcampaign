@@ -1,8 +1,23 @@
 import Redis from "ioredis";
 
-const globalForRedis = globalThis as unknown as { redis: Redis };
+const globalForRedis = globalThis as unknown as { redis: Redis | undefined };
 
-export const redis =
-  globalForRedis.redis ?? new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+function getRedisClient(): Redis {
+  if (globalForRedis.redis) return globalForRedis.redis;
 
-if (process.env.NODE_ENV !== "production") globalForRedis.redis = redis;
+  const client = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+    maxRetriesPerRequest: null,
+    lazyConnect: true,
+  });
+
+  globalForRedis.redis = client;
+  return client;
+}
+
+export const redis = new Proxy({} as Redis, {
+  get(_target, prop, receiver) {
+    const client = getRedisClient();
+    const value = Reflect.get(client, prop, client);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { authenticateApi, jsonResponse, errorResponse } from "@/lib/api-auth";
-import { campaignQueue } from "@/lib/queue";
+import { getCampaignQueue } from "@/lib/queue";
 
 const createCampaignSchema = z.object({
   name: z.string().min(1, "Campaign name is required"),
@@ -61,13 +61,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (!isScheduled) {
-      await campaignQueue.add("send-campaign", {
+      await getCampaignQueue().add("send-campaign", {
         campaignId: campaign.id,
       });
     } else {
       const delay =
         new Date(scheduledAt).getTime() - Date.now();
-      await campaignQueue.add(
+      await getCampaignQueue().add(
         "send-campaign",
         { campaignId: campaign.id },
         { delay: Math.max(delay, 0) }

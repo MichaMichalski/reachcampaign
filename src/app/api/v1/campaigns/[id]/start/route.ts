@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticateApi, jsonResponse, errorResponse } from "@/lib/api-auth";
-import { campaignQueue } from "@/lib/queue";
+import { getCampaignQueue } from "@/lib/queue";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         });
 
         for (const member of members) {
-          await campaignQueue.add(
+          await getCampaignQueue().add(
             `campaign-${id}-${trigger.id}-${member.contactId}`,
             {
               campaignId: id,
