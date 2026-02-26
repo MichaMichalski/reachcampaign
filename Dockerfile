@@ -35,4 +35,4 @@ COPY --from=deps --chown=nextjs:nodejs /app/node_modules/@prisma/engines ./node_
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
-CMD ["sh", "-c", "pnpm prisma migrate deploy && node server.js"
+CMD node node_modules/prisma/build/index.js db push --skip-generate --accept-data-loss && node server.js
