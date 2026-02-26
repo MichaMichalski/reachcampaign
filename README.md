@@ -62,7 +62,7 @@ A full-featured marketing automation platform for managing contacts, building em
 | **Workflow Builder** | React Flow (@xyflow/react) |
 | **Charts** | Recharts |
 | **Email Sending** | Nodemailer (multi-SMTP) |
-| **Deployment** | Docker + Docker Compose |
+| **Deployment** | Docker (single Dockerfile) |
 
 ---
 
@@ -71,7 +71,8 @@ A full-featured marketing automation platform for managing contacts, building em
 ### Prerequisites
 
 - Node.js 20+
-- Docker & Docker Compose (for PostgreSQL and Redis)
+- PostgreSQL 16+
+- Redis 7+
 - npm or pnpm
 
 ### Setup
@@ -89,33 +90,27 @@ A full-featured marketing automation platform for managing contacts, building em
    cp .env.example .env
    ```
 
-   Edit `.env` and set `NEXTAUTH_SECRET`, `ENCRYPTION_KEY`, and other values as needed.
+   Edit `.env` and set `DATABASE_URL`, `REDIS_URL`, `NEXTAUTH_SECRET`, `ENCRYPTION_KEY`, and other values as needed.
 
-3. **Start PostgreSQL and Redis**
-
-   ```bash
-   docker-compose up -d postgres redis
-   ```
-
-4. **Install dependencies**
+3. **Install dependencies**
 
    ```bash
    npm install
    ```
 
-5. **Initialize the database**
+4. **Initialize the database**
 
    ```bash
    npx prisma db push
    ```
 
-6. **Start the development server**
+5. **Start the development server**
 
    ```bash
    npm run dev
    ```
 
-7. **Open the app**
+6. **Open the app**
 
    Navigate to [http://localhost:3000](http://localhost:3000). On first launch you'll be prompted to create an admin account.
 
@@ -323,44 +318,49 @@ Configure sending domains and providers in **Settings**, then attach domains to 
 
 ## Docker Deployment
 
-### Production with Docker Compose
+The app ships as a single Dockerfile. PostgreSQL and Redis are deployed separately (e.g., as managed services or standalone containers in Coolify).
 
-1. **Clone and configure**
+### Build and run
 
-   ```bash
-   git clone https://github.com/your-org/reachcampaign.git
-   cd reachcampaign
-   cp .env.example .env
-   ```
-
-2. **Set required secrets in `.env`**
-
-   ```env
-   NEXTAUTH_SECRET="your-secure-random-string"
-   ENCRYPTION_KEY="your-32-char-encryption-key-here"
-   ```
-
-3. **Build and run**
+1. **Build the Docker image**
 
    ```bash
-   docker-compose up -d
+   docker build -t reachcampaign .
    ```
 
-   This starts:
+2. **Run the container**
 
-   - **app** — Next.js app on port 3000
-   - **worker** — BullMQ worker for jobs
-   - **postgres** — PostgreSQL 16
-   - **redis** — Redis 7
+   Pass `DATABASE_URL` and `REDIS_URL` (plus other secrets) as environment variables pointing to your external PostgreSQL and Redis instances:
 
-4. **Access the app**
+   ```bash
+   docker run -p 3000:3000 \
+     -e DATABASE_URL="postgresql://user:password@your-postgres-host:5432/reachcampaign" \
+     -e REDIS_URL="redis://default:password@your-redis-host:6379" \
+     -e NEXTAUTH_SECRET="your-secure-random-string" \
+     -e NEXTAUTH_URL="https://your-domain.com" \
+     -e AUTH_TRUST_HOST=true \
+     -e ENCRYPTION_KEY="your-32-char-encryption-key-here" \
+     reachcampaign
+   ```
 
-   Open [http://localhost:3000](http://localhost:3000). On first launch you'll be prompted to create an admin account. Database migrations run automatically on startup.
+   Database migrations run automatically on startup via `prisma db push`.
 
-### Development (Postgres + Redis only)
+3. **Run the worker** (separate container or process)
+
+   ```bash
+   docker run \
+     -e DATABASE_URL="postgresql://user:password@your-postgres-host:5432/reachcampaign" \
+     -e REDIS_URL="redis://default:password@your-redis-host:6379" \
+     --entrypoint node \
+     reachcampaign \
+     -e "require('tsx/cjs');require('./workers/index.ts')"
+   ```
+
+### Local development
+
+Make sure PostgreSQL and Redis are running locally (or point `DATABASE_URL` / `REDIS_URL` to remote instances), then:
 
 ```bash
-docker-compose up -d postgres redis
 npm install
 npx prisma db push
 npm run dev

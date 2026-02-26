@@ -2,13 +2,11 @@ import { Worker, Queue, Job } from "bullmq";
 import { PrismaClient } from "@prisma/client";
 import { calculateWarmupTarget, advanceWarmupDay } from "../src/lib/email/warmup";
 import { resetDailyCounters } from "../src/lib/email/domain-rotation";
+import { getRedisConnection } from "../src/lib/queue";
 
 const prisma = new PrismaClient();
 
-const connection = {
-  host: process.env.REDIS_URL?.replace("redis://", "").split(":")[0] || "localhost",
-  port: parseInt(process.env.REDIS_URL?.split(":").pop() || "6379"),
-};
+const connection = getRedisConnection();
 
 const warmupQueue = new Queue("domain-warmup", { connection });
 

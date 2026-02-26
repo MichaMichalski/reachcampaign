@@ -27,12 +27,12 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Prisma CLI + engines + schema for db push at startup
-COPY --from=builder --chown=nextjs:nodejs /app/prisma/schema.prisma ./prisma/schema.prisma
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
+# Prisma CLI + all @prisma/* packages + schema for db push at startup
+# COPY --from=builder --chown=nextjs:nodejs /app/prisma/schema.prisma ./prisma/schema.prisma
+# COPY --from=deps --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+# COPY --from=deps --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
-CMD node node_modules/prisma/build/index.js db push --skip-generate --accept-data-loss && node server.js
+CMD npm run db:push && node server.js

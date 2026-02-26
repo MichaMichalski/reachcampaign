@@ -1,13 +1,10 @@
 import { Worker, Job, Queue } from "bullmq";
 import { PrismaClient } from "@prisma/client";
+import { getRedisConnection } from "../src/lib/queue";
 
 const prisma = new PrismaClient();
 
-const connection = {
-  host:
-    process.env.REDIS_URL?.replace("redis://", "").split(":")[0] || "localhost",
-  port: parseInt(process.env.REDIS_URL?.split(":").pop() || "6379"),
-};
+const connection = getRedisConnection();
 
 type CampaignJobData = {
   campaignId: string;

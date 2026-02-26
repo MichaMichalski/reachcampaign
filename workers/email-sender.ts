@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { sendEmail } from "../src/lib/email/sender";
 import { renderEmailTemplate } from "../src/lib/email/template-renderer";
 import { selectDomain } from "../src/lib/email/domain-rotation";
+import { getRedisConnection } from "../src/lib/queue";
 
 const prisma = new PrismaClient();
 
@@ -12,10 +13,7 @@ type EmailJobData = {
   templateId: string;
 };
 
-const connection = {
-  host: process.env.REDIS_URL?.replace("redis://", "").split(":")[0] || "localhost",
-  port: parseInt(process.env.REDIS_URL?.split(":").pop() || "6379"),
-};
+const connection = getRedisConnection();
 
 async function processEmailJob(job: Job<EmailJobData>) {
   const { campaignId, contactId, templateId } = job.data;
