@@ -14,10 +14,6 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate
 RUN npm run build
-RUN ./node_modules/.bin/esbuild prisma/seed.ts \
-      --bundle --platform=node --format=cjs \
-      --outfile=prisma/seed.js \
-      --external:@prisma/client --external:bcryptjs
 
 # --- DB migration runner (has full node_modules) ---
 FROM base AS migrator

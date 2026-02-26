@@ -107,12 +107,7 @@ A full-featured marketing automation platform for managing contacts, building em
 
    ```bash
    npx prisma db push
-   npm run db:seed
    ```
-
-   The seed creates an admin user:
-   - **Email:** `admin@reachcampaign.local`
-   - **Password:** `admin123`
 
 6. **Start the development server**
 
@@ -122,7 +117,7 @@ A full-featured marketing automation platform for managing contacts, building em
 
 7. **Open the app**
 
-   Navigate to [http://localhost:3000](http://localhost:3000) and sign in with the admin credentials.
+   Navigate to [http://localhost:3000](http://localhost:3000). On first launch you'll be prompted to create an admin account.
 
 ---
 
@@ -277,7 +272,14 @@ All API endpoints use the base path `/api/v1`. Authentication is required unless
 
 ### Scoring Rules
 
-Scoring rules are defined in the database (via seed or direct DB access). They map event types (`EMAIL_OPEN`, `EMAIL_CLICK`, `PAGE_VIEW`, `FORM_SUBMIT`) to point values. A CRUD API for scoring rules can be added as a future enhancement.
+Scoring rules map event types (`EMAIL_OPEN`, `EMAIL_CLICK`, `PAGE_VIEW`, `FORM_SUBMIT`) to point values.
+
+| Method | Path | Description | Auth Required |
+|--------|------|-------------|---------------|
+| GET | `/api/v1/scoring-rules` | List scoring rules | Yes |
+| POST | `/api/v1/scoring-rules` | Create scoring rule | Yes |
+| PUT | `/api/v1/scoring-rules/:id` | Update scoring rule | Yes |
+| DELETE | `/api/v1/scoring-rules/:id` | Delete scoring rule | Yes |
 
 ---
 
@@ -351,16 +353,9 @@ Configure sending domains and providers in **Settings**, then attach domains to 
    - **postgres** — PostgreSQL 16
    - **redis** — Redis 7
 
-4. **Initialize database (first run)**
+4. **Access the app**
 
-   ```bash
-   docker-compose exec app npx prisma db push
-   docker-compose exec app npm run db:seed
-   ```
-
-5. **Access the app**
-
-   Open [http://localhost:3000](http://localhost:3000).
+   Open [http://localhost:3000](http://localhost:3000). On first launch you'll be prompted to create an admin account. Database migrations run automatically on startup.
 
 ### Development (Postgres + Redis only)
 
@@ -368,7 +363,6 @@ Configure sending domains and providers in **Settings**, then attach domains to 
 docker-compose up -d postgres redis
 npm install
 npx prisma db push
-npm run db:seed
 npm run dev
 ```
 

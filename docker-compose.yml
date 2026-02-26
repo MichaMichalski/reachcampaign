@@ -1,5 +1,5 @@
 services:
-  # Runs schema push + seed, then exits. App waits for this to finish.
+  # Runs schema push, then exits. App waits for this to finish.
   migrate:
     build:
       context: .
@@ -8,8 +8,6 @@ services:
       sh -c "
         echo '==> Pushing database schema...' &&
         ./node_modules/.bin/prisma db push --skip-generate --accept-data-loss &&
-        echo '==> Seeding database...' &&
-        node prisma/seed.js &&
         echo '==> Database ready.'
       "
     environment:
