@@ -73,7 +73,7 @@ A full-featured marketing automation platform for managing contacts, building em
 - Node.js 20+
 - PostgreSQL 16+
 - Redis 7+
-- npm or pnpm
+- pnpm (`npm install -g pnpm`)
 
 ### Setup
 
@@ -95,19 +95,19 @@ A full-featured marketing automation platform for managing contacts, building em
 3. **Install dependencies**
 
    ```bash
-   npm install
+   pnpm install
    ```
 
 4. **Initialize the database**
 
    ```bash
-   npx prisma db push
+   pnpm prisma db push
    ```
 
 5. **Start the development server**
 
    ```bash
-   npm run dev
+   pnpm dev
    ```
 
 6. **Open the app**
@@ -361,15 +361,15 @@ The app ships as a single Dockerfile. PostgreSQL and Redis are deployed separate
 Make sure PostgreSQL and Redis are running locally (or point `DATABASE_URL` / `REDIS_URL` to remote instances), then:
 
 ```bash
-npm install
-npx prisma db push
-npm run dev
+pnpm install
+pnpm prisma db push
+pnpm dev
 ```
 
 Run the worker in a separate terminal:
 
 ```bash
-npm run worker
+pnpm worker
 ```
 
 ---
