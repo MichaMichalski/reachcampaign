@@ -45,4 +45,5 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma/schema.prisma ./prisma/sch
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 CMD node_modules/.bin/prisma db push --skip-generate --accept-data-loss && node server.js
