@@ -1,21 +1,4 @@
 services:
-  # Runs schema push, then exits. App waits for this to finish.
-  migrate:
-    build:
-      context: .
-      target: migrator
-    command: >
-      sh -c "
-        echo '==> Pushing database schema...' &&
-        ./node_modules/.bin/prisma db push --skip-generate --accept-data-loss &&
-        echo '==> Database ready.'
-      "
-    environment:
-      - DATABASE_URL=postgresql://reachcampaign:reachcampaign@postgres:5432/reachcampaign
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   app:
     build:
       context: .
@@ -30,8 +13,8 @@ services:
       - AUTH_TRUST_HOST=true
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-01234567890123456789012345678901}
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
 
@@ -45,8 +28,8 @@ services:
       - REDIS_URL=redis://redis:6379
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-01234567890123456789012345678901}
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
 
