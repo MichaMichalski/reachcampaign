@@ -1,0 +1,512 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  role          UserRole  @default(ADMIN)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  apiKeys  ApiKey[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  name      String
+  key       String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastUsed  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Contact Management ───
+
+model Contact {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  firstName    String?
+  lastName     String?
+  phone        String?
+  company      String?
+  title        String?
+  customFields Json     @default("{}")
+  score        Int      @default(0)
+  doNotContact Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tags              ContactTag[]
+  notes             ContactNote[]
+  segmentMemberships ContactSegment[]
+  formSubmissions   FormSubmission[]
+  campaignLogs      CampaignLog[]
+  emailLogs         EmailLog[]
+  trackingEvents    TrackingEvent[]
+}
+
+model Tag {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  color     String       @default("#6366f1")
+  createdAt DateTime     @default(now())
+  contacts  ContactTag[]
+}
+
+model ContactTag {
+  contactId String
+  tagId     String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([contactId, tagId])
+}
+
+model ContactNote {
+  id        String   @id @default(cuid())
+  contactId String
+  content   String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Segmentation ───
+
+enum SegmentType {
+  DYNAMIC
+  STATIC
+}
+
+model Segment {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  type        SegmentType @default(DYNAMIC)
+  filters     Json        @default("[]")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  members  ContactSegment[]
+  campaigns CampaignNode[]
+}
+
+model ContactSegment {
+  contactId String
+  segmentId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  segment   Segment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([contactId, segmentId])
+}
+
+// ─── Email Templates ───
+
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  subject     String
+  designJson  Json     @default("{}")
+  htmlContent String   @default("")
+  textContent String?
+  previewText String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  emailCampaigns EmailCampaign[]
+  campaignNodes  CampaignNode[]
+}
+
+// ─── Email Campaigns ───
+
+enum EmailCampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
+model EmailCampaign {
+  id             String              @id @default(cuid())
+  name           String
+  templateId     String
+  template       EmailTemplate       @relation(fields: [templateId], references: [id])
+  segmentIds     String[]
+  status         EmailCampaignStatus @default(DRAFT)
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  totalRecipients Int                @default(0)
+  totalSent      Int                 @default(0)
+  totalOpened    Int                 @default(0)
+  totalClicked   Int                 @default(0)
+  totalBounced   Int                 @default(0)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  emailLogs EmailLog[]
+}
+
+// ─── Landing Pages ───
+
+model LandingPage {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  designJson  Json     @default("{}")
+  htmlContent String   @default("")
+  metaTitle   String?
+  metaDescription String?
+  ogImage     String?
+  published   Boolean  @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  forms Form[]
+}
+
+// ─── Forms ───
+
+model Form {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  landingPageId String?
+  landingPage   LandingPage? @relation(fields: [landingPageId], references: [id])
+  fields        Json     @default("[]")
+  successMessage String  @default("Thank you for your submission!")
+  redirectUrl   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  submissions FormSubmission[]
+}
+
+model FormSubmission {
+  id        String   @id @default(cuid())
+  formId    String
+  contactId String?
+  data      Json
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  contact   Contact? @relation(fields: [contactId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// ─── Campaigns (Automation Workflows) ───
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+model Campaign {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  status      CampaignStatus @default(DRAFT)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  nodes CampaignNode[]
+  edges CampaignEdge[]
+  logs  CampaignLog[]
+}
+
+enum CampaignNodeType {
+  TRIGGER
+  CONDITION
+  ACTION
+  DELAY
+}
+
+model CampaignNode {
+  id         String           @id @default(cuid())
+  campaignId String
+  campaign   Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  type       CampaignNodeType
+  label      String
+  config     Json             @default("{}")
+  positionX  Float            @default(0)
+  positionY  Float            @default(0)
+
+  templateId String?
+  template   EmailTemplate? @relation(fields: [templateId], references: [id])
+  segmentId  String?
+  segment    Segment?       @relation(fields: [segmentId], references: [id])
+
+  sourceEdges CampaignEdge[] @relation("SourceNode")
+  targetEdges CampaignEdge[] @relation("TargetNode")
+  logs        CampaignLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CampaignEdge {
+  id           String       @id @default(cuid())
+  campaignId   String
+  campaign     Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sourceNodeId String
+  sourceNode   CampaignNode @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNodeId String
+  targetNode   CampaignNode @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  label        String?
+  createdAt    DateTime     @default(now())
+}
+
+enum CampaignLogStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+model CampaignLog {
+  id         String            @id @default(cuid())
+  campaignId String
+  campaign   Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  nodeId     String
+  node       CampaignNode      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  contactId  String
+  contact    Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status     CampaignLogStatus @default(PENDING)
+  result     Json?
+  error      String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+}
+
+// ─── Email Deliverability ───
+
+enum DomainStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  PAUSED
+}
+
+model SendingDomain {
+  id         String       @id @default(cuid())
+  domain     String       @unique
+  status     DomainStatus @default(PENDING)
+  spfValid   Boolean      @default(false)
+  dkimValid  Boolean      @default(false)
+  dmarcValid Boolean      @default(false)
+  maxDailyVolume Int      @default(500)
+  dailySent  Int          @default(0)
+  dailyResetAt DateTime   @default(now())
+  bounceRate Float        @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  warmup    DomainWarmup?
+  providers DomainProvider[]
+  emailLogs EmailLog[]
+}
+
+model DomainWarmup {
+  id              String       @id @default(cuid())
+  domainId        String       @unique
+  domain          SendingDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  enabled         Boolean      @default(true)
+  currentDay      Int          @default(1)
+  dailyTarget     Int          @default(50)
+  rampPercentage  Int          @default(100)
+  maxTarget       Int          @default(10000)
+  startedAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+enum EmailProviderType {
+  SMTP
+  SENDGRID
+  AWS_SES
+  MAILGUN
+  POSTMARK
+}
+
+enum SendingStrategy {
+  ROUND_ROBIN
+  WEIGHTED
+  FAILOVER
+}
+
+model EmailProvider {
+  id       String            @id @default(cuid())
+  name     String
+  type     EmailProviderType
+  config   Json
+  weight   Int               @default(1)
+  priority Int               @default(0)
+  enabled  Boolean           @default(true)
+  strategy SendingStrategy   @default(ROUND_ROBIN)
+
+  dailyLimit    Int @default(10000)
+  hourlylimit   Int @default(500)
+  dailySent     Int @default(0)
+  dailyResetAt  DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  domains   DomainProvider[]
+  emailLogs EmailLog[]
+}
+
+model DomainProvider {
+  domainId   String
+  providerId String
+  domain     SendingDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  provider   EmailProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@id([domainId, providerId])
+}
+
+// ─── Email Logs ───
+
+enum EmailStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  COMPLAINED
+  FAILED
+}
+
+model EmailLog {
+  id              String        @id @default(cuid())
+  contactId       String
+  contact         Contact       @relation(fields: [contactId], references: [id])
+  campaignId      String?
+  campaign        EmailCampaign? @relation(fields: [campaignId], references: [id])
+  domainId        String?
+  domain          SendingDomain? @relation(fields: [domainId], references: [id])
+  providerId      String?
+  provider        EmailProvider? @relation(fields: [providerId], references: [id])
+  toEmail         String
+  fromEmail       String
+  subject         String
+  status          EmailStatus   @default(QUEUED)
+  messageId       String?
+  openedAt        DateTime?
+  clickedAt       DateTime?
+  bouncedAt       DateTime?
+  bounceType      String?
+  error           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+// ─── Tracking ───
+
+enum TrackingEventType {
+  EMAIL_OPEN
+  EMAIL_CLICK
+  PAGE_VIEW
+  FORM_SUBMIT
+  CAMPAIGN_TRIGGER
+}
+
+model TrackingEvent {
+  id        String            @id @default(cuid())
+  contactId String?
+  contact   Contact?          @relation(fields: [contactId], references: [id])
+  type      TrackingEventType
+  data      Json              @default("{}")
+  ip        String?
+  userAgent String?
+  createdAt DateTime          @default(now())
+}
+
+// ─── Webhooks ───
+
+model Webhook {
+  id        String   @id @default(cuid())
+  url       String
+  events    String[]
+  secret    String?
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Lead Scoring Rules ───
+
+model ScoringRule {
+  id         String @id @default(cuid())
+  name       String
+  eventType  TrackingEventType
+  points     Int
+  enabled    Boolean @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
