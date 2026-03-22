@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { jsonResponse, errorResponse } from "@/lib/api-auth";
+import { getCampaignQueue } from "@/lib/queue";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -59,12 +60,45 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (emailField) {
       const email = data[emailField.id] as string;
       if (email && typeof email === "string") {
+        const hasFirstNameField = fields.some((f) => f.id === "firstName");
+        const rawFirstName = hasFirstNameField ? data.firstName : undefined;
+        const firstName =
+          typeof rawFirstName === "string" && rawFirstName.trim()
+            ? rawFirstName.trim()
+            : undefined;
+
         const contact = await prisma.contact.upsert({
           where: { email: email.toLowerCase().trim() },
-          update: {},
-          create: { email: email.toLowerCase().trim() },
+          update: firstName ? { firstName } : {},
+          create: {
+            email: email.toLowerCase().trim(),
+            ...(firstName ? { firstName } : {}),
+          },
         });
         contactId = contact.id;
+      }
+    }
+
+    if (contactId) {
+      const campaigns = await prisma.campaign.findMany({
+        where: { status: "ACTIVE" },
+        include: {
+          nodes: { where: { type: "TRIGGER" } },
+        },
+      });
+
+      const queue = getCampaignQueue();
+      for (const campaign of campaigns) {
+        for (const node of campaign.nodes) {
+          const config = node.config as Record<string, unknown>;
+          if (config.triggerType === "form_submit" && config.formId === id) {
+            await queue.add(`campaign-${campaign.id}-${node.id}-${contactId}`, {
+              campaignId: campaign.id,
+              nodeId: node.id,
+              contactId,
+            });
+          }
+        }
       }
     }
 

@@ -18,15 +18,15 @@ const connection = getRedisConnection();
 async function processEmailJob(job: Job<EmailJobData>) {
   const { campaignId, contactId, templateId } = job.data;
 
-  const [contact, template, campaign] = await Promise.all([
+  const [contact, template, emailCampaign] = await Promise.all([
     prisma.contact.findUnique({ where: { id: contactId } }),
     prisma.emailTemplate.findUnique({ where: { id: templateId } }),
     prisma.emailCampaign.findUnique({ where: { id: campaignId } }),
   ]);
 
-  if (!contact || !template || !campaign) {
+  if (!contact || !template) {
     throw new Error(
-      `Missing data: contact=${!!contact} template=${!!template} campaign=${!!campaign}`
+      `Missing data: contact=${!!contact} template=${!!template}`
     );
   }
 
@@ -42,10 +42,12 @@ async function processEmailJob(job: Job<EmailJobData>) {
 
   const fromEmail = `noreply@${domain.domain}`;
 
+  const renderCampaignId = emailCampaign?.id ?? campaignId;
+
   const emailLog = await prisma.emailLog.create({
     data: {
       contactId: contact.id,
-      campaignId: campaign.id,
+      campaignId: emailCampaign?.id ?? null,
       domainId: domain.id,
       toEmail: contact.email,
       fromEmail,
@@ -59,7 +61,7 @@ async function processEmailJob(job: Job<EmailJobData>) {
       html: template.htmlContent,
       contact,
       emailLogId: emailLog.id,
-      campaignId: campaign.id,
+      campaignId: renderCampaignId,
     });
 
     const result = await sendEmail({
@@ -84,10 +86,12 @@ async function processEmailJob(job: Job<EmailJobData>) {
       data: { dailySent: { increment: 1 } },
     });
 
-    await prisma.emailCampaign.update({
-      where: { id: campaign.id },
-      data: { totalSent: { increment: 1 } },
-    });
+    if (emailCampaign) {
+      await prisma.emailCampaign.update({
+        where: { id: emailCampaign.id },
+        data: { totalSent: { increment: 1 } },
+      });
+    }
 
     return { messageId: result.messageId, provider: result.provider };
   } catch (err) {
