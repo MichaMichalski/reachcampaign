@@ -7,6 +7,7 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 const updateCampaignSchema = z.object({
   name: z.string().min(1).optional(),
+  templateId: z.string().min(1).optional(),
   segmentIds: z.array(z.string()).min(1).optional(),
   scheduledAt: z.string().datetime().optional(),
 });
@@ -54,12 +55,20 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { scheduledAt, ...data } = parsed.data;
+    const { scheduledAt, templateId, ...data } = parsed.data;
+
+    if (templateId) {
+      const template = await prisma.emailTemplate.findUnique({
+        where: { id: templateId },
+      });
+      if (!template) return errorResponse("Template not found", 404);
+    }
 
     const campaign = await prisma.emailCampaign.update({
       where: { id },
       data: {
         ...data,
+        ...(templateId !== undefined && { templateId }),
         ...(scheduledAt !== undefined && {
           scheduledAt: new Date(scheduledAt),
         }),

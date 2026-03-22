@@ -1,0 +1,3434 @@
+openapi: 3.1.0
+info:
+  title: ReachCampaign API
+  description: |
+    Full REST API for ReachCampaign – an email marketing, landing page, form, and campaign automation platform built with GrapeJS editors.
+
+    ## Authentication
+    All endpoints (except public ones like form submission, tracking, and previews) require authentication via one of:
+    - **API Key**: Pass `x-api-key` header with a valid key created under Settings → API Keys.
+    - **Session Cookie**: Browser session via NextAuth (cookie-based).
+
+    ## GrapeJS Integration
+    Email templates and landing pages store both the GrapeJS editor state (`designJson`) and the rendered output (`htmlContent`).
+    When creating or updating via the API, you can pass the full GrapeJS project data as `designJson` and the rendered HTML as `htmlContent`.
+    This allows headless creation of templates and pages without the visual editor.
+
+    ## Pagination
+    List endpoints that support pagination accept `page` (default 1) and `perPage` (default 20, max 100) query parameters.
+    Responses include a `meta` or `pagination` object with `total`, `page`, `perPage`, and `totalPages`.
+  version: 1.0.0
+  contact:
+    name: ReachCampaign Support
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+security:
+  - ApiKeyAuth: []
+  - SessionAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+    SessionAuth:
+      type: apiKey
+      in: cookie
+      name: next-auth.session-token
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+
+    # ─── Contact ───
+    Contact:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+          nullable: true
+        lastName:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        company:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        customFields:
+          type: object
+          additionalProperties: true
+        score:
+          type: integer
+        doNotContact:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              contactId:
+                type: string
+              tagId:
+                type: string
+              tag:
+                $ref: '#/components/schemas/Tag'
+
+    ContactCreate:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        company:
+          type: string
+        title:
+          type: string
+        customFields:
+          type: object
+          additionalProperties: true
+        tags:
+          type: array
+          items:
+            type: string
+          description: Array of tag IDs to assign
+
+    ContactUpdate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        company:
+          type: string
+        title:
+          type: string
+        customFields:
+          type: object
+          additionalProperties: true
+        score:
+          type: integer
+        doNotContact:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+          description: Array of tag IDs (replaces existing tags)
+
+    # ─── Tag ───
+    Tag:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+        createdAt:
+          type: string
+          format: date-time
+
+    TagCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          default: '#6366f1'
+
+    TagUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+
+    # ─── Contact Note ───
+    ContactNote:
+      type: object
+      properties:
+        id:
+          type: string
+        contactId:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContactNoteCreate:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+
+    # ─── Segment ───
+    FilterRule:
+      type: object
+      required: [field, operator]
+      properties:
+        field:
+          type: string
+        operator:
+          type: string
+          enum: [equals, not_equals, contains, greater_than, less_than, is_empty, is_not_empty]
+        value:
+          description: Comparison value (type depends on field and operator)
+
+    Segment:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [DYNAMIC, STATIC]
+        filters:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterRule'
+        memberCount:
+          type: integer
+          description: Computed member count
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SegmentCreate:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        type:
+          type: string
+          enum: [DYNAMIC, STATIC]
+        filters:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterRule'
+
+    SegmentUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        filters:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterRule'
+
+    SegmentMembersModify:
+      type: object
+      required: [contactIds]
+      properties:
+        contactIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+
+    # ─── Email Template ───
+    EmailTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        subject:
+          type: string
+        previewText:
+          type: string
+          nullable: true
+        designJson:
+          type: object
+          additionalProperties: true
+          description: GrapeJS project data (editor state). Pass the full project JSON to recreate the design.
+        htmlContent:
+          type: string
+          description: Rendered HTML output (with inlined CSS for emails). Can be generated from GrapeJS or provided directly.
+        textContent:
+          type: string
+          nullable: true
+          description: Plain-text version of the email
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    EmailTemplateCreate:
+      type: object
+      required: [name, subject]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        subject:
+          type: string
+          minLength: 1
+        previewText:
+          type: string
+        designJson:
+          type: object
+          additionalProperties: true
+          description: GrapeJS project data. Use `editor.getProjectData()` output or build manually.
+          default: {}
+        htmlContent:
+          type: string
+          description: Rendered HTML with inlined styles. Use `editor.runCommand('gjs-get-inlined-html')` output or provide raw HTML.
+          default: ''
+        textContent:
+          type: string
+
+    EmailTemplateUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        subject:
+          type: string
+          minLength: 1
+        previewText:
+          type: string
+        designJson:
+          type: object
+          additionalProperties: true
+          description: GrapeJS project data
+        htmlContent:
+          type: string
+        textContent:
+          type: string
+
+    # ─── Email Campaign ───
+    EmailCampaign:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        templateId:
+          type: string
+        template:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            subject:
+              type: string
+        segmentIds:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [DRAFT, SCHEDULED, SENDING, SENT, CANCELLED]
+        scheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        totalRecipients:
+          type: integer
+        totalSent:
+          type: integer
+        totalOpened:
+          type: integer
+        totalClicked:
+          type: integer
+        totalBounced:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    EmailCampaignCreate:
+      type: object
+      required: [name, templateId, segmentIds]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        templateId:
+          type: string
+          minLength: 1
+          description: ID of the email template to send
+        segmentIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: IDs of segments whose contacts will receive the email
+        scheduledAt:
+          type: string
+          format: date-time
+          description: If provided, schedules the campaign. If omitted, sends immediately.
+
+    EmailCampaignUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        templateId:
+          type: string
+          minLength: 1
+          description: Change the email template (only for DRAFT/SCHEDULED campaigns)
+        segmentIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        scheduledAt:
+          type: string
+          format: date-time
+
+    # ─── Landing Page ───
+    LandingPage:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        designJson:
+          type: object
+          additionalProperties: true
+          description: GrapeJS project data (editor state)
+        htmlContent:
+          type: string
+          description: Rendered HTML with embedded CSS
+        metaTitle:
+          type: string
+          nullable: true
+        metaDescription:
+          type: string
+          nullable: true
+        ogImage:
+          type: string
+          nullable: true
+        published:
+          type: boolean
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    LandingPageCreate:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          minLength: 1
+          description: URL-friendly identifier (must be unique)
+        designJson:
+          type: object
+          additionalProperties: true
+          description: GrapeJS project data. Use `editor.getProjectData()` output or build manually.
+          default: {}
+        htmlContent:
+          type: string
+          description: Rendered HTML with `<style>` block. Use `editor.getHtml()` + `editor.getCss()` or provide raw HTML.
+          default: ''
+        metaTitle:
+          type: string
+        metaDescription:
+          type: string
+        ogImage:
+          type: string
+
+    LandingPageUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          minLength: 1
+        designJson:
+          type: object
+          additionalProperties: true
+        htmlContent:
+          type: string
+        metaTitle:
+          type: string
+          nullable: true
+        metaDescription:
+          type: string
+          nullable: true
+        ogImage:
+          type: string
+          nullable: true
+
+    # ─── Form ───
+    FormField:
+      type: object
+      required: [id, label, type]
+      properties:
+        id:
+          type: string
+          description: Unique field identifier used as key in submission data
+        label:
+          type: string
+          minLength: 1
+        type:
+          type: string
+          enum: [text, email, number, textarea, select, checkbox, radio]
+        required:
+          type: boolean
+          default: false
+        placeholder:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+          description: Options for select/radio/checkbox fields
+
+    Form:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        landingPageId:
+          type: string
+          nullable: true
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormField'
+        successMessage:
+          type: string
+        redirectUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        _count:
+          type: object
+          properties:
+            submissions:
+              type: integer
+
+    FormCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        landingPageId:
+          type: string
+          description: Optionally link to a landing page
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormField'
+          default: []
+        successMessage:
+          type: string
+          default: Thank you for your submission!
+        redirectUrl:
+          type: string
+          format: uri
+          description: Redirect URL after submission (or empty string for no redirect)
+
+    FormUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+        landingPageId:
+          type: string
+          nullable: true
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormField'
+        successMessage:
+          type: string
+        redirectUrl:
+          type: string
+          nullable: true
+
+    FormSubmission:
+      type: object
+      properties:
+        id:
+          type: string
+        formId:
+          type: string
+        contactId:
+          type: string
+          nullable: true
+        data:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        contact:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            email:
+              type: string
+            firstName:
+              type: string
+            lastName:
+              type: string
+
+    # ─── Campaign (Automation Workflow) ───
+    CampaignNode:
+      type: object
+      required: [type, label]
+      properties:
+        type:
+          type: string
+          enum: [TRIGGER, CONDITION, ACTION, DELAY]
+        label:
+          type: string
+          minLength: 1
+        config:
+          type: object
+          additionalProperties: true
+          description: |
+            Node-specific configuration. Depends on type:
+            - TRIGGER: `{ triggerType: "segment_entry"|"form_submit"|"tag_added"|"event", segmentId?, formId?, tagId?, eventName? }`
+            - CONDITION: `{ conditionType: "has_tag"|"in_segment"|"score_above"|"field_equals", tagId?, segmentId?, threshold?, field?, value? }`
+            - ACTION: `{ actionType: "send_email"|"add_tag"|"remove_tag"|"update_field"|"add_to_segment"|"webhook", templateId?, tagId?, segmentId?, field?, value?, webhookUrl? }`
+            - DELAY: `{ delayType: "fixed"|"until_date", delayValue?, delayUnit?: "minutes"|"hours"|"days", untilDate? }`
+          default: {}
+        positionX:
+          type: number
+          description: X coordinate in the workflow editor canvas
+          default: 0
+        positionY:
+          type: number
+          description: Y coordinate in the workflow editor canvas
+          default: 0
+        templateId:
+          type: string
+          nullable: true
+          description: Email template ID (for send_email actions)
+        segmentId:
+          type: string
+          nullable: true
+          description: Segment ID (for segment-related triggers/conditions/actions)
+
+    CampaignEdge:
+      type: object
+      required: [sourceNodeIndex, targetNodeIndex]
+      properties:
+        sourceNodeIndex:
+          type: integer
+          description: Index into the nodes array (0-based)
+        targetNodeIndex:
+          type: integer
+          description: Index into the nodes array (0-based)
+        label:
+          type: string
+          description: Edge label (e.g. "Yes"/"No" for condition branches)
+
+    Campaign:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [DRAFT, ACTIVE, PAUSED, COMPLETED]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        nodes:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              campaignId:
+                type: string
+              type:
+                type: string
+                enum: [TRIGGER, CONDITION, ACTION, DELAY]
+              label:
+                type: string
+              config:
+                type: object
+                additionalProperties: true
+              positionX:
+                type: number
+              positionY:
+                type: number
+              templateId:
+                type: string
+                nullable: true
+              segmentId:
+                type: string
+                nullable: true
+              createdAt:
+                type: string
+                format: date-time
+              updatedAt:
+                type: string
+                format: date-time
+        edges:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              campaignId:
+                type: string
+              sourceNodeId:
+                type: string
+              targetNodeId:
+                type: string
+              label:
+                type: string
+                nullable: true
+              createdAt:
+                type: string
+                format: date-time
+
+    CampaignCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignNode'
+          default: []
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignEdge'
+          default: []
+
+    CampaignUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignNode'
+          description: If provided, all existing nodes and edges are replaced
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignEdge'
+          description: Only used when nodes is also provided
+
+    # ─── Settings ───
+    SendingDomain:
+      type: object
+      properties:
+        id:
+          type: string
+        domain:
+          type: string
+        dkimSelector:
+          type: string
+          nullable: true
+          description: DKIM DNS label (left of ._domainkey); set from your mail host for verification
+        status:
+          type: string
+          enum: [PENDING, VERIFIED, FAILED, PAUSED]
+        spfValid:
+          type: boolean
+        dkimValid:
+          type: boolean
+        dmarcValid:
+          type: boolean
+        maxDailyVolume:
+          type: integer
+        dailySent:
+          type: integer
+        bounceRate:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        warmup:
+          $ref: '#/components/schemas/DomainWarmup'
+
+    DomainWarmup:
+      type: object
+      properties:
+        id:
+          type: string
+        domainId:
+          type: string
+        enabled:
+          type: boolean
+        currentDay:
+          type: integer
+        dailyTarget:
+          type: integer
+        rampPercentage:
+          type: integer
+        maxTarget:
+          type: integer
+        startedAt:
+          type: string
+          format: date-time
+
+    DomainCreate:
+      type: object
+      required: [domain]
+      properties:
+        domain:
+          type: string
+          minLength: 3
+          pattern: '^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+    DomainUpdate:
+      type: object
+      properties:
+        maxDailyVolume:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [PENDING, VERIFIED, FAILED, PAUSED]
+        dkimSelector:
+          type: string
+          nullable: true
+          maxLength: 63
+          pattern: '^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$'
+          description: DKIM selector from your mail host; omit or null to clear
+
+    EmailProvider:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [SMTP, SENDGRID, AWS_SES, MAILGUN, POSTMARK]
+        config:
+          type: object
+          additionalProperties: true
+          description: Provider configuration (sensitive fields are masked in responses)
+        weight:
+          type: integer
+        priority:
+          type: integer
+        enabled:
+          type: boolean
+        strategy:
+          type: string
+          enum: [ROUND_ROBIN, WEIGHTED, FAILOVER]
+        dailyLimit:
+          type: integer
+        hourlylimit:
+          type: integer
+        dailySent:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProviderCreate:
+      type: object
+      required: [name, type, config]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        type:
+          type: string
+          enum: [SMTP, SENDGRID, AWS_SES, MAILGUN, POSTMARK]
+        config:
+          type: object
+          additionalProperties: true
+          description: |
+            Provider-specific configuration:
+            - SMTP: `{ host, port, secure, user, pass }`
+            - SENDGRID: `{ apiKey }`
+            - AWS_SES: `{ accessKeyId, secretAccessKey, region }`
+            - MAILGUN: `{ apiKey, domain }`
+            - POSTMARK: `{ serverToken }`
+        weight:
+          type: integer
+          minimum: 1
+        priority:
+          type: integer
+          minimum: 0
+        strategy:
+          type: string
+          enum: [ROUND_ROBIN, WEIGHTED, FAILOVER]
+        dailyLimit:
+          type: integer
+          minimum: 1
+        hourlyLimit:
+          type: integer
+          minimum: 1
+        domainIds:
+          type: array
+          items:
+            type: string
+          description: IDs of sending domains to associate
+
+    ProviderUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        type:
+          type: string
+          enum: [SMTP, SENDGRID, AWS_SES, MAILGUN, POSTMARK]
+        config:
+          type: object
+          additionalProperties: true
+        weight:
+          type: integer
+          minimum: 1
+        priority:
+          type: integer
+          minimum: 0
+        strategy:
+          type: string
+          enum: [ROUND_ROBIN, WEIGHTED, FAILOVER]
+        dailyLimit:
+          type: integer
+          minimum: 1
+        hourlyLimit:
+          type: integer
+          minimum: 1
+        enabled:
+          type: boolean
+        domainIds:
+          type: array
+          items:
+            type: string
+
+    # ─── API Keys ───
+    ApiKey:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        maskedKey:
+          type: string
+        lastUsed:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    ApiKeyCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        expiresAt:
+          type: string
+          format: date-time
+
+    ApiKeyCreated:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        key:
+          type: string
+          description: The full API key (only shown once at creation)
+        createdAt:
+          type: string
+          format: date-time
+
+    # ─── Webhooks ───
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum: [contact.created, contact.updated, email.sent, email.opened, email.bounced, form.submitted, campaign.completed]
+        secret:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    WebhookCreate:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum: [contact.created, contact.updated, email.sent, email.opened, email.bounced, form.submitted, campaign.completed]
+          minItems: 1
+        secret:
+          type: string
+          minLength: 8
+
+    WebhookUpdate:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum: [contact.created, contact.updated, email.sent, email.opened, email.bounced, form.submitted, campaign.completed]
+          minItems: 1
+        secret:
+          type: string
+          minLength: 8
+        enabled:
+          type: boolean
+
+    # ─── Scoring Rules ───
+    ScoringRule:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        eventType:
+          type: string
+          enum: [EMAIL_OPEN, EMAIL_CLICK, PAGE_VIEW, FORM_SUBMIT, CAMPAIGN_TRIGGER]
+        points:
+          type: integer
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ScoringRuleCreate:
+      type: object
+      required: [name, eventType, points]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        eventType:
+          type: string
+          enum: [EMAIL_OPEN, EMAIL_CLICK, PAGE_VIEW, FORM_SUBMIT, CAMPAIGN_TRIGGER]
+        points:
+          type: integer
+        enabled:
+          type: boolean
+
+    ScoringRuleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        eventType:
+          type: string
+          enum: [EMAIL_OPEN, EMAIL_CLICK, PAGE_VIEW, FORM_SUBMIT, CAMPAIGN_TRIGGER]
+        points:
+          type: integer
+        enabled:
+          type: boolean
+
+    # ─── Tracking ───
+    TrackingEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        contactId:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [EMAIL_OPEN, EMAIL_CLICK, PAGE_VIEW, FORM_SUBMIT, CAMPAIGN_TRIGGER]
+        data:
+          type: object
+          additionalProperties: true
+        ip:
+          type: string
+          nullable: true
+        userAgent:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        contact:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            email:
+              type: string
+            firstName:
+              type: string
+            lastName:
+              type: string
+
+    PageView:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+        referrer:
+          type: string
+        title:
+          type: string
+        contactId:
+          type: string
+          nullable: true
+        event:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PerPageParam:
+      name: perPage
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+paths:
+  # ══════════════════════════════════════════════
+  # CONTACTS
+  # ══════════════════════════════════════════════
+  /contacts:
+    get:
+      tags: [Contacts]
+      summary: List contacts
+      operationId: listContacts
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by email, first name, or last name
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: Filter by tag name
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            default: createdAt
+          description: Field to sort by
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Paginated list of contacts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Contact'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Contacts]
+      summary: Create a contact
+      operationId: createContact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactCreate'
+      responses:
+        '201':
+          description: Contact created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+        '409':
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /contacts/{id}:
+    get:
+      tags: [Contacts]
+      summary: Get a contact
+      operationId: getContact
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Contact with tags, notes, and tracking events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+        '404':
+          description: Contact not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Contacts]
+      summary: Update a contact
+      operationId: updateContact
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactUpdate'
+      responses:
+        '200':
+          description: Contact updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+        '404':
+          description: Contact not found
+        '409':
+          description: Email already exists
+    delete:
+      tags: [Contacts]
+      summary: Delete a contact
+      operationId: deleteContact
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Contact deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Contact not found
+
+  /contacts/{id}/notes:
+    get:
+      tags: [Contacts]
+      summary: List notes for a contact
+      operationId: listContactNotes
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: List of notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ContactNote'
+        '404':
+          description: Contact not found
+    post:
+      tags: [Contacts]
+      summary: Add a note to a contact
+      operationId: createContactNote
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactNoteCreate'
+      responses:
+        '201':
+          description: Note created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactNote'
+        '404':
+          description: Contact not found
+
+  /contacts/import:
+    post:
+      tags: [Contacts]
+      summary: Import contacts from CSV
+      operationId: importContacts
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: |
+                    CSV file with headers. Recognized columns:
+                    `email`, `first_name`/`firstName`, `last_name`/`lastName`, `phone`, `company`, `title`
+      responses:
+        '200':
+          description: Import results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: integer
+                  skipped:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: string
+
+  /contacts/export:
+    get:
+      tags: [Contacts]
+      summary: Export contacts as CSV
+      operationId: exportContacts
+      parameters:
+        - name: segmentId
+          in: query
+          schema:
+            type: string
+          description: Filter by segment ID
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: Filter by tag name
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  # ══════════════════════════════════════════════
+  # TAGS
+  # ══════════════════════════════════════════════
+  /tags:
+    get:
+      tags: [Tags]
+      summary: List all tags
+      operationId: listTags
+      responses:
+        '200':
+          description: List of tags with contact counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/Tag'
+                    - type: object
+                      properties:
+                        _count:
+                          type: object
+                          properties:
+                            contacts:
+                              type: integer
+    post:
+      tags: [Tags]
+      summary: Create a tag
+      operationId: createTag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagCreate'
+      responses:
+        '201':
+          description: Tag created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+        '409':
+          description: Tag name already exists
+
+  /tags/{id}:
+    put:
+      tags: [Tags]
+      summary: Update a tag
+      operationId: updateTag
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagUpdate'
+      responses:
+        '200':
+          description: Tag updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+        '404':
+          description: Tag not found
+        '409':
+          description: Tag name already exists
+    delete:
+      tags: [Tags]
+      summary: Delete a tag
+      operationId: deleteTag
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Tag deleted
+        '404':
+          description: Tag not found
+
+  # ══════════════════════════════════════════════
+  # SEGMENTS
+  # ══════════════════════════════════════════════
+  /segments:
+    get:
+      tags: [Segments]
+      summary: List all segments
+      operationId: listSegments
+      responses:
+        '200':
+          description: List of segments with computed member counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Segment'
+    post:
+      tags: [Segments]
+      summary: Create a segment
+      operationId: createSegment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SegmentCreate'
+      responses:
+        '201':
+          description: Segment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Segment'
+
+  /segments/{id}:
+    get:
+      tags: [Segments]
+      summary: Get a segment
+      operationId: getSegment
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Segment with member count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Segment'
+        '404':
+          description: Segment not found
+    put:
+      tags: [Segments]
+      summary: Update a segment
+      operationId: updateSegment
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SegmentUpdate'
+      responses:
+        '200':
+          description: Segment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Segment'
+        '404':
+          description: Segment not found
+    delete:
+      tags: [Segments]
+      summary: Delete a segment
+      operationId: deleteSegment
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Segment deleted
+        '404':
+          description: Segment not found
+
+  /segments/{id}/members:
+    get:
+      tags: [Segments]
+      summary: List segment members
+      operationId: listSegmentMembers
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Paginated list of contacts in the segment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Contact'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          description: Segment not found
+    post:
+      tags: [Segments]
+      summary: Add members to a static segment
+      operationId: addSegmentMembers
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SegmentMembersModify'
+      responses:
+        '200':
+          description: Members added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  memberCount:
+                    type: integer
+        '400':
+          description: Cannot add members to dynamic segment
+        '404':
+          description: Segment not found
+    delete:
+      tags: [Segments]
+      summary: Remove members from a static segment
+      operationId: removeSegmentMembers
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SegmentMembersModify'
+      responses:
+        '200':
+          description: Members removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  memberCount:
+                    type: integer
+        '400':
+          description: Cannot remove members from dynamic segment
+        '404':
+          description: Segment not found
+
+  # ══════════════════════════════════════════════
+  # EMAIL TEMPLATES
+  # ══════════════════════════════════════════════
+  /emails:
+    get:
+      tags: [Email Templates]
+      summary: List all email templates
+      operationId: listEmailTemplates
+      responses:
+        '200':
+          description: List of email templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmailTemplate'
+    post:
+      tags: [Email Templates]
+      summary: Create an email template
+      operationId: createEmailTemplate
+      description: |
+        Create an email template with GrapeJS design data and/or raw HTML.
+
+        To create a template programmatically without the visual editor, provide:
+        - `htmlContent`: Your complete HTML email markup with inlined CSS
+        - `designJson`: Optional GrapeJS project data (if you want the template to be editable in the visual editor later)
+
+        The `designJson` field accepts the exact JSON structure produced by `editor.getProjectData()` in GrapeJS.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailTemplateCreate'
+            examples:
+              minimalTemplate:
+                summary: Minimal template with HTML only
+                value:
+                  name: Welcome Email
+                  subject: "Welcome to {{company}}"
+                  htmlContent: "<html><body><h1>Welcome!</h1><p>Hello {{firstName}}</p></body></html>"
+              fullTemplate:
+                summary: Full template with GrapeJS design data
+                value:
+                  name: Newsletter Template
+                  subject: "Weekly Newsletter"
+                  previewText: "This week's highlights"
+                  htmlContent: "<html><body>...</body></html>"
+                  designJson:
+                    assets: []
+                    styles: []
+                    pages:
+                      - component: "<body>...</body>"
+                        id: "page-1"
+                  textContent: "Plain text version of the email"
+      responses:
+        '201':
+          description: Email template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplate'
+
+  /emails/{id}:
+    get:
+      tags: [Email Templates]
+      summary: Get an email template
+      operationId: getEmailTemplate
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Email template with full design data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplate'
+        '404':
+          description: Template not found
+    put:
+      tags: [Email Templates]
+      summary: Update an email template
+      operationId: updateEmailTemplate
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailTemplateUpdate'
+      responses:
+        '200':
+          description: Email template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplate'
+        '404':
+          description: Template not found
+    delete:
+      tags: [Email Templates]
+      summary: Delete an email template
+      operationId: deleteEmailTemplate
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Template deleted
+        '404':
+          description: Template not found
+
+  /emails/{id}/preview:
+    get:
+      tags: [Email Templates]
+      summary: Preview rendered email HTML
+      operationId: previewEmailTemplate
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: contactId
+          in: query
+          schema:
+            type: string
+          description: Contact ID for Handlebars variable substitution (firstName, lastName, email, company)
+      responses:
+        '200':
+          description: Rendered HTML
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Template not found
+
+  # ══════════════════════════════════════════════
+  # EMAIL CAMPAIGNS
+  # ══════════════════════════════════════════════
+  /email-campaigns:
+    get:
+      tags: [Email Campaigns]
+      summary: List all email campaigns
+      operationId: listEmailCampaigns
+      responses:
+        '200':
+          description: List of email campaigns with template info
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmailCampaign'
+    post:
+      tags: [Email Campaigns]
+      summary: Create and send/schedule an email campaign
+      operationId: createEmailCampaign
+      description: |
+        Creates an email campaign. If `scheduledAt` is provided, the campaign is scheduled for that time.
+        If `scheduledAt` is omitted, the campaign starts sending immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailCampaignCreate'
+            examples:
+              sendNow:
+                summary: Send immediately
+                value:
+                  name: February Newsletter
+                  templateId: clx1234abc
+                  segmentIds: [clx5678def]
+              schedule:
+                summary: Schedule for later
+                value:
+                  name: March Campaign
+                  templateId: clx1234abc
+                  segmentIds: [clx5678def, clx9012ghi]
+                  scheduledAt: "2026-03-01T09:00:00.000Z"
+      responses:
+        '201':
+          description: Email campaign created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailCampaign'
+        '404':
+          description: Template not found
+
+  /email-campaigns/{id}:
+    get:
+      tags: [Email Campaigns]
+      summary: Get an email campaign
+      operationId: getEmailCampaign
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Email campaign details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailCampaign'
+        '404':
+          description: Campaign not found
+    put:
+      tags: [Email Campaigns]
+      summary: Update an email campaign
+      operationId: updateEmailCampaign
+      description: Only DRAFT or SCHEDULED campaigns can be updated.
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailCampaignUpdate'
+      responses:
+        '200':
+          description: Email campaign updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailCampaign'
+        '400':
+          description: Campaign cannot be updated (wrong status)
+        '404':
+          description: Campaign or template not found
+    delete:
+      tags: [Email Campaigns]
+      summary: Delete an email campaign
+      operationId: deleteEmailCampaign
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Campaign deleted
+        '404':
+          description: Campaign not found
+
+  /email-campaigns/{id}/cancel:
+    post:
+      tags: [Email Campaigns]
+      summary: Cancel an email campaign
+      operationId: cancelEmailCampaign
+      description: Cancels a DRAFT, SCHEDULED, or SENDING campaign. Removes pending jobs from the queue.
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Campaign cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  status:
+                    type: string
+                    enum: [CANCELLED]
+        '400':
+          description: Campaign cannot be cancelled (already SENT or CANCELLED)
+        '404':
+          description: Campaign not found
+
+  # ══════════════════════════════════════════════
+  # LANDING PAGES
+  # ══════════════════════════════════════════════
+  /pages:
+    get:
+      tags: [Landing Pages]
+      summary: List all landing pages
+      operationId: listLandingPages
+      responses:
+        '200':
+          description: List of landing pages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LandingPage'
+    post:
+      tags: [Landing Pages]
+      summary: Create a landing page
+      operationId: createLandingPage
+      description: |
+        Create a landing page with GrapeJS design data and/or raw HTML.
+
+        The `designJson` field accepts the exact JSON structure produced by `editor.getProjectData()` in GrapeJS.
+        The `htmlContent` field should contain the full HTML including a `<style>` block.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LandingPageCreate'
+            examples:
+              simpleHtml:
+                summary: Simple HTML page
+                value:
+                  name: Product Landing
+                  slug: product-launch
+                  htmlContent: "<style>body{font-family:sans-serif}</style><div><h1>Product Launch</h1></div>"
+                  metaTitle: "Our New Product"
+                  metaDescription: "Check out our latest product"
+              withDesign:
+                summary: Page with GrapeJS design data
+                value:
+                  name: Event Page
+                  slug: summer-event
+                  designJson:
+                    assets: []
+                    styles: []
+                    pages:
+                      - component: "<body>...</body>"
+                        id: "page-1"
+                  htmlContent: "<style>...</style><div>...</div>"
+      responses:
+        '201':
+          description: Landing page created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingPage'
+        '400':
+          description: Slug already exists
+
+  /pages/{id}:
+    get:
+      tags: [Landing Pages]
+      summary: Get a landing page
+      operationId: getLandingPage
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Landing page with forms
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/LandingPage'
+                  - type: object
+                    properties:
+                      forms:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Form'
+        '404':
+          description: Page not found
+    put:
+      tags: [Landing Pages]
+      summary: Update a landing page
+      operationId: updateLandingPage
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LandingPageUpdate'
+      responses:
+        '200':
+          description: Landing page updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingPage'
+        '400':
+          description: Slug already exists
+        '404':
+          description: Page not found
+    delete:
+      tags: [Landing Pages]
+      summary: Delete a landing page
+      operationId: deleteLandingPage
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Page deleted
+        '404':
+          description: Page not found
+
+  /pages/{id}/preview:
+    get:
+      tags: [Landing Pages]
+      summary: Preview rendered page HTML
+      operationId: previewLandingPage
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Rendered HTML
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Page not found
+
+  /pages/{id}/publish:
+    post:
+      tags: [Landing Pages]
+      summary: Publish a landing page
+      operationId: publishLandingPage
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Page published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingPage'
+        '404':
+          description: Page not found
+    delete:
+      tags: [Landing Pages]
+      summary: Unpublish a landing page
+      operationId: unpublishLandingPage
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Page unpublished
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingPage'
+        '404':
+          description: Page not found
+
+  # ══════════════════════════════════════════════
+  # FORMS
+  # ══════════════════════════════════════════════
+  /forms:
+    get:
+      tags: [Forms]
+      summary: List all forms
+      operationId: listForms
+      responses:
+        '200':
+          description: List of forms with submission counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Form'
+    post:
+      tags: [Forms]
+      summary: Create a form
+      operationId: createForm
+      description: |
+        Create a form with field definitions. Each field has an `id` that serves as the key in submission data.
+        Supported field types: text, email, number, textarea, select, checkbox, radio.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormCreate'
+            examples:
+              contactForm:
+                summary: Contact form
+                value:
+                  name: Contact Us
+                  description: Get in touch
+                  fields:
+                    - id: name
+                      label: Your Name
+                      type: text
+                      required: true
+                      placeholder: John Doe
+                    - id: email
+                      label: Email Address
+                      type: email
+                      required: true
+                      placeholder: john@example.com
+                    - id: message
+                      label: Message
+                      type: textarea
+                      required: true
+                    - id: topic
+                      label: Topic
+                      type: select
+                      options: [General, Support, Sales, Partnership]
+                  successMessage: "Thanks! We'll get back to you soon."
+              newsletterSignup:
+                summary: Newsletter signup
+                value:
+                  name: Newsletter Signup
+                  landingPageId: clx1234abc
+                  fields:
+                    - id: email
+                      label: Email
+                      type: email
+                      required: true
+                  redirectUrl: "https://example.com/thank-you"
+      responses:
+        '201':
+          description: Form created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Form'
+
+  /forms/{id}:
+    get:
+      tags: [Forms]
+      summary: Get a form
+      operationId: getForm
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Form with submission count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Form'
+        '404':
+          description: Form not found
+    put:
+      tags: [Forms]
+      summary: Update a form
+      operationId: updateForm
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormUpdate'
+      responses:
+        '200':
+          description: Form updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Form'
+        '404':
+          description: Form not found
+    delete:
+      tags: [Forms]
+      summary: Delete a form
+      operationId: deleteForm
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Form deleted
+        '404':
+          description: Form not found
+
+  /forms/{id}/submit:
+    post:
+      tags: [Forms]
+      summary: Submit a form (public)
+      operationId: submitForm
+      security: []
+      description: |
+        Public endpoint for form submissions. Accepts JSON, URL-encoded, or multipart form data.
+        Field keys must match the `id` values defined in the form's field configuration.
+        If an email-type field is present, a Contact record is automatically upserted.
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: Key-value pairs where keys are the field IDs from the form definition
+            example:
+              name: John Doe
+              email: john@example.com
+              message: I'd like to learn more
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Submission accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '303':
+          description: Redirect to configured URL
+        '400':
+          description: Validation failed (required fields missing)
+        '404':
+          description: Form not found
+
+  /forms/{id}/submissions:
+    get:
+      tags: [Forms]
+      summary: List form submissions
+      operationId: listFormSubmissions
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Paginated list of submissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FormSubmission'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          description: Form not found
+
+  # ══════════════════════════════════════════════
+  # CAMPAIGNS (AUTOMATION WORKFLOWS)
+  # ══════════════════════════════════════════════
+  /campaigns:
+    get:
+      tags: [Campaigns]
+      summary: List all automation campaigns
+      operationId: listCampaigns
+      responses:
+        '200':
+          description: List of campaigns with node/log counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/Campaign'
+                    - type: object
+                      properties:
+                        _count:
+                          type: object
+                          properties:
+                            nodes:
+                              type: integer
+                            logs:
+                              type: integer
+    post:
+      tags: [Campaigns]
+      summary: Create an automation campaign
+      operationId: createCampaign
+      description: |
+        Create an automation workflow with nodes and edges. Nodes are connected via edges using array indices.
+
+        **Node types:**
+        - `TRIGGER`: Entry point (segment_entry, form_submit, tag_added, event)
+        - `CONDITION`: Branching logic (has_tag, in_segment, score_above, field_equals)
+        - `ACTION`: Performs an action (send_email, add_tag, remove_tag, update_field, add_to_segment, webhook)
+        - `DELAY`: Waits before proceeding (fixed duration or until a specific date)
+
+        **Edge indexing:** Edges reference nodes by their 0-based index in the `nodes` array. For example, an edge with `sourceNodeIndex: 0` and `targetNodeIndex: 1` connects the first node to the second.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignCreate'
+            examples:
+              welcomeSequence:
+                summary: Welcome email sequence
+                value:
+                  name: Welcome Sequence
+                  description: Send welcome emails to new contacts
+                  nodes:
+                    - type: TRIGGER
+                      label: New Contact in Segment
+                      config:
+                        triggerType: segment_entry
+                        segmentId: clx1234abc
+                      positionX: 250
+                      positionY: 50
+                      segmentId: clx1234abc
+                    - type: ACTION
+                      label: Send Welcome Email
+                      config:
+                        actionType: send_email
+                        templateId: clx5678def
+                      positionX: 250
+                      positionY: 200
+                      templateId: clx5678def
+                    - type: DELAY
+                      label: Wait 3 Days
+                      config:
+                        delayType: fixed
+                        delayValue: 3
+                        delayUnit: days
+                      positionX: 250
+                      positionY: 350
+                    - type: ACTION
+                      label: Send Follow-up
+                      config:
+                        actionType: send_email
+                        templateId: clx9012ghi
+                      positionX: 250
+                      positionY: 500
+                      templateId: clx9012ghi
+                  edges:
+                    - sourceNodeIndex: 0
+                      targetNodeIndex: 1
+                    - sourceNodeIndex: 1
+                      targetNodeIndex: 2
+                    - sourceNodeIndex: 2
+                      targetNodeIndex: 3
+      responses:
+        '201':
+          description: Campaign created with nodes and edges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+
+  /campaigns/{id}:
+    get:
+      tags: [Campaigns]
+      summary: Get an automation campaign
+      operationId: getCampaign
+      description: Returns the campaign with all nodes, edges, and the last 50 execution logs.
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Campaign with full workflow data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+        '404':
+          description: Campaign not found
+    put:
+      tags: [Campaigns]
+      summary: Update an automation campaign
+      operationId: updateCampaign
+      description: |
+        Update campaign metadata and/or workflow. If `nodes` is provided, all existing nodes and edges
+        are deleted and recreated from the provided data (full replacement strategy).
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignUpdate'
+      responses:
+        '200':
+          description: Campaign updated with nodes and edges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+        '404':
+          description: Campaign not found
+    delete:
+      tags: [Campaigns]
+      summary: Delete an automation campaign
+      operationId: deleteCampaign
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Campaign deleted
+        '404':
+          description: Campaign not found
+
+  /campaigns/{id}/start:
+    post:
+      tags: [Campaigns]
+      summary: Start an automation campaign
+      operationId: startCampaign
+      description: |
+        Activates a DRAFT or PAUSED campaign. For TRIGGER nodes with `triggerType: "segment_entry"`,
+        all current segment members are immediately enqueued for processing.
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Campaign started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  status:
+                    type: string
+                    enum: [ACTIVE]
+        '400':
+          description: Campaign cannot be started (wrong status)
+        '404':
+          description: Campaign not found
+
+  /campaigns/{id}/pause:
+    post:
+      tags: [Campaigns]
+      summary: Pause an automation campaign
+      operationId: pauseCampaign
+      description: Pauses an ACTIVE campaign. Can be resumed with start.
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Campaign paused
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  status:
+                    type: string
+                    enum: [PAUSED]
+        '400':
+          description: Campaign is not active
+        '404':
+          description: Campaign not found
+
+  /campaigns/{id}/stop:
+    post:
+      tags: [Campaigns]
+      summary: Stop an automation campaign
+      operationId: stopCampaign
+      description: |
+        Permanently stops a campaign. Sets status to COMPLETED, marks pending/processing logs as SKIPPED,
+        and removes all queued jobs.
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Campaign stopped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  status:
+                    type: string
+                    enum: [COMPLETED]
+        '400':
+          description: Campaign is already completed
+        '404':
+          description: Campaign not found
+
+  # ══════════════════════════════════════════════
+  # TRACKING
+  # ══════════════════════════════════════════════
+  /tracking/script:
+    get:
+      tags: [Tracking]
+      summary: Get tracking JavaScript snippet
+      operationId: getTrackingScript
+      security: []
+      responses:
+        '200':
+          description: JavaScript tracking code
+          content:
+            application/javascript:
+              schema:
+                type: string
+
+  /tracking/page:
+    post:
+      tags: [Tracking]
+      summary: Track a page view
+      operationId: trackPageView
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageView'
+      responses:
+        '200':
+          description: Page view tracked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /tracking/open/{id}:
+    get:
+      tags: [Tracking]
+      summary: Track email open (pixel)
+      operationId: trackEmailOpen
+      security: []
+      description: Returns a 1x1 transparent GIF and records the open event.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Email log ID
+      responses:
+        '200':
+          description: Transparent tracking pixel
+          content:
+            image/gif:
+              schema:
+                type: string
+                format: binary
+
+  /tracking/click/{id}:
+    get:
+      tags: [Tracking]
+      summary: Track email click (redirect)
+      operationId: trackEmailClick
+      security: []
+      description: Records the click event and redirects to the target URL. The ID is a base64-encoded JSON object containing `emailLogId` and `url`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Base64-encoded JSON with emailLogId and url
+      responses:
+        '302':
+          description: Redirect to target URL
+
+  /tracking/events:
+    get:
+      tags: [Tracking]
+      summary: List tracking events
+      operationId: listTrackingEvents
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [EMAIL_OPEN, EMAIL_CLICK, PAGE_VIEW, FORM_SUBMIT, CAMPAIGN_TRIGGER]
+          description: Filter by event type
+        - name: contactId
+          in: query
+          schema:
+            type: string
+          description: Filter by contact ID
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter events from this date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter events until this date
+      responses:
+        '200':
+          description: Paginated list of tracking events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TrackingEvent'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  # ══════════════════════════════════════════════
+  # REPORTS
+  # ══════════════════════════════════════════════
+  /reports/overview:
+    get:
+      tags: [Reports]
+      summary: Get dashboard overview
+      operationId: getOverviewReport
+      responses:
+        '200':
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contacts:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      newThisMonth:
+                        type: integer
+                      growth:
+                        type: number
+                        description: Growth percentage vs. previous month
+                  emails:
+                    type: object
+                    properties:
+                      sent:
+                        type: integer
+                      opened:
+                        type: integer
+                      clicked:
+                        type: integer
+                      bounced:
+                        type: integer
+                  rates:
+                    type: object
+                    properties:
+                      openRate:
+                        type: number
+                      clickRate:
+                        type: number
+                      bounceRate:
+                        type: number
+                  activeCampaigns:
+                    type: integer
+                  formSubmissions:
+                    type: integer
+
+  /reports/email-performance:
+    get:
+      tags: [Reports]
+      summary: Get daily email performance
+      operationId: getEmailPerformance
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+            default: 30
+          description: Number of days to include
+      responses:
+        '200':
+          description: Daily email metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                        sent:
+                          type: integer
+                        opened:
+                          type: integer
+                        clicked:
+                          type: integer
+                        bounced:
+                          type: integer
+
+  # ══════════════════════════════════════════════
+  # SETTINGS - DOMAINS
+  # ══════════════════════════════════════════════
+  /settings/domains:
+    get:
+      tags: [Settings - Domains]
+      summary: List sending domains
+      operationId: listDomains
+      responses:
+        '200':
+          description: List of sending domains with warmup and provider info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SendingDomain'
+    post:
+      tags: [Settings - Domains]
+      summary: Add a sending domain
+      operationId: createDomain
+      description: Creates a domain with automatic warmup schedule initialization.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomainCreate'
+      responses:
+        '201':
+          description: Domain created with warmup config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendingDomain'
+        '409':
+          description: Domain already exists
+
+  /settings/domains/{id}:
+    get:
+      tags: [Settings - Domains]
+      summary: Get a sending domain
+      operationId: getDomain
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Domain with warmup, providers, and recent email logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendingDomain'
+        '404':
+          description: Domain not found
+    put:
+      tags: [Settings - Domains]
+      summary: Update a sending domain
+      operationId: updateDomain
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomainUpdate'
+      responses:
+        '200':
+          description: Domain updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendingDomain'
+        '404':
+          description: Domain not found
+    delete:
+      tags: [Settings - Domains]
+      summary: Delete a sending domain
+      operationId: deleteDomain
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Domain deleted
+        '404':
+          description: Domain not found
+
+  /settings/domains/{id}/verify:
+    post:
+      tags: [Settings - Domains]
+      summary: Verify domain DNS records
+      operationId: verifyDomain
+      description: Checks SPF, DKIM, and DMARC DNS records for the domain.
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Verification results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domain:
+                    $ref: '#/components/schemas/SendingDomain'
+                  checks:
+                    type: object
+                    properties:
+                      spf:
+                        type: object
+                        properties:
+                          valid:
+                            type: boolean
+                          record:
+                            type: string
+                      dkim:
+                        type: object
+                        properties:
+                          valid:
+                            type: boolean
+                          record:
+                            type: string
+                      dmarc:
+                        type: object
+                        properties:
+                          valid:
+                            type: boolean
+                          record:
+                            type: string
+        '404':
+          description: Domain not found
+
+  # ══════════════════════════════════════════════
+  # SETTINGS - PROVIDERS
+  # ══════════════════════════════════════════════
+  /settings/providers:
+    get:
+      tags: [Settings - Providers]
+      summary: List email providers
+      operationId: listProviders
+      description: Returns providers with masked sensitive config fields.
+      responses:
+        '200':
+          description: List of providers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EmailProvider'
+    post:
+      tags: [Settings - Providers]
+      summary: Add an email provider
+      operationId: createProvider
+      description: Provider config is encrypted at rest.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderCreate'
+            examples:
+              smtp:
+                summary: SMTP provider
+                value:
+                  name: Primary SMTP
+                  type: SMTP
+                  config:
+                    host: smtp.example.com
+                    port: 587
+                    secure: true
+                    user: noreply@example.com
+                    pass: "smtp-password"
+                  strategy: ROUND_ROBIN
+                  dailyLimit: 5000
+                  hourlyLimit: 200
+              sendgrid:
+                summary: SendGrid provider
+                value:
+                  name: SendGrid
+                  type: SENDGRID
+                  config:
+                    apiKey: SG.xxxxx
+                  strategy: FAILOVER
+                  priority: 1
+      responses:
+        '201':
+          description: Provider created (config masked in response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProvider'
+
+  /settings/providers/{id}:
+    get:
+      tags: [Settings - Providers]
+      summary: Get an email provider
+      operationId: getProvider
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Provider with masked config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProvider'
+        '404':
+          description: Provider not found
+    put:
+      tags: [Settings - Providers]
+      summary: Update an email provider
+      operationId: updateProvider
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderUpdate'
+      responses:
+        '200':
+          description: Provider updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProvider'
+        '404':
+          description: Provider not found
+    delete:
+      tags: [Settings - Providers]
+      summary: Delete an email provider
+      operationId: deleteProvider
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Provider deleted
+        '404':
+          description: Provider not found
+
+  # ══════════════════════════════════════════════
+  # SETTINGS - API KEYS
+  # ══════════════════════════════════════════════
+  /settings/api-keys:
+    get:
+      tags: [Settings - API Keys]
+      summary: List API keys
+      operationId: listApiKeys
+      description: Returns keys with masked values. The full key is only shown once at creation.
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApiKey'
+    post:
+      tags: [Settings - API Keys]
+      summary: Create an API key
+      operationId: createApiKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKeyCreate'
+      responses:
+        '201':
+          description: API key created (full key shown only once)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyCreated'
+
+  /settings/api-keys/{id}:
+    delete:
+      tags: [Settings - API Keys]
+      summary: Delete an API key
+      operationId: deleteApiKey
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: API key deleted
+        '404':
+          description: API key not found
+
+  # ══════════════════════════════════════════════
+  # WEBHOOKS
+  # ══════════════════════════════════════════════
+  /webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List webhooks
+      operationId: listWebhooks
+      responses:
+        '200':
+          description: List of webhooks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Webhook'
+    post:
+      tags: [Webhooks]
+      summary: Create a webhook
+      operationId: createWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookCreate'
+      responses:
+        '201':
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+
+  /webhooks/{id}:
+    get:
+      tags: [Webhooks]
+      summary: Get a webhook
+      operationId: getWebhook
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Webhook details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '404':
+          description: Webhook not found
+    put:
+      tags: [Webhooks]
+      summary: Update a webhook
+      operationId: updateWebhook
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookUpdate'
+      responses:
+        '200':
+          description: Webhook updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '404':
+          description: Webhook not found
+    delete:
+      tags: [Webhooks]
+      summary: Delete a webhook
+      operationId: deleteWebhook
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Webhook deleted
+        '404':
+          description: Webhook not found
+
+  /webhooks/bounce:
+    post:
+      tags: [Webhooks]
+      summary: Bounce/complaint webhook receiver
+      operationId: handleBounceWebhook
+      security: []
+      description: |
+        Receives bounce and complaint notifications from email providers (SendGrid, Mailgun, AWS SES).
+        Authenticated via `x-webhook-secret` header or `secret` query parameter matching `WEBHOOK_SECRET` env var.
+      parameters:
+        - name: x-webhook-secret
+          in: header
+          schema:
+            type: string
+        - name: secret
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: array
+                  description: SendGrid events
+                  items:
+                    type: object
+                    properties:
+                      event:
+                        type: string
+                      email:
+                        type: string
+                      sg_message_id:
+                        type: string
+                      reason:
+                        type: string
+                      type:
+                        type: string
+                - type: object
+                  description: Mailgun event
+                  properties:
+                    event-data:
+                      type: object
+                - type: object
+                  description: AWS SES notification
+                  properties:
+                    Type:
+                      type: string
+                    notificationType:
+                      type: string
+      responses:
+        '200':
+          description: Webhook received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+        '401':
+          description: Invalid webhook secret
+
+  # ══════════════════════════════════════════════
+  # SCORING RULES
+  # ══════════════════════════════════════════════
+  /scoring-rules:
+    get:
+      tags: [Scoring Rules]
+      summary: List scoring rules
+      operationId: listScoringRules
+      responses:
+        '200':
+          description: List of scoring rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScoringRule'
+    post:
+      tags: [Scoring Rules]
+      summary: Create a scoring rule
+      operationId: createScoringRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoringRuleCreate'
+            examples:
+              emailOpen:
+                summary: Points for email opens
+                value:
+                  name: Email Open
+                  eventType: EMAIL_OPEN
+                  points: 5
+              formSubmit:
+                summary: Points for form submissions
+                value:
+                  name: Form Submission
+                  eventType: FORM_SUBMIT
+                  points: 20
+      responses:
+        '201':
+          description: Scoring rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringRule'
+
+  /scoring-rules/{id}:
+    put:
+      tags: [Scoring Rules]
+      summary: Update a scoring rule
+      operationId: updateScoringRule
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoringRuleUpdate'
+      responses:
+        '200':
+          description: Scoring rule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringRule'
+        '404':
+          description: Scoring rule not found
+    delete:
+      tags: [Scoring Rules]
+      summary: Delete a scoring rule
+      operationId: deleteScoringRule
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Scoring rule deleted
+        '404':
+          description: Scoring rule not found
+
+tags:
+  - name: Contacts
+    description: Contact management (CRUD, tags, notes, import/export)
+  - name: Tags
+    description: Tag management for contact categorization
+  - name: Segments
+    description: Dynamic and static contact segments with filter rules
+  - name: Email Templates
+    description: Email templates with GrapeJS visual editor support
+  - name: Email Campaigns
+    description: One-time email sends and scheduled campaigns
+  - name: Landing Pages
+    description: Landing pages with GrapeJS visual editor support
+  - name: Forms
+    description: Form builder with field definitions and public submission
+  - name: Campaigns
+    description: Automation workflows with trigger/condition/action/delay nodes
+  - name: Tracking
+    description: Event tracking (page views, email opens/clicks)
+  - name: Reports
+    description: Dashboard analytics and email performance metrics
+  - name: Settings - Domains
+    description: Sending domain management with DNS verification
+  - name: Settings - Providers
+    description: Email provider configuration (SMTP, SendGrid, AWS SES, etc.)
+  - name: Settings - API Keys
+    description: API key management for programmatic access
+  - name: Webhooks
+    description: Outgoing webhook configuration and bounce/complaint processing
+  - name: Scoring Rules
+    description: Lead scoring rule configuration

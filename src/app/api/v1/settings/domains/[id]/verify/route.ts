@@ -20,26 +20,52 @@ async function checkSPF(domain: string): Promise<boolean> {
   }
 }
 
-async function checkDKIM(domain: string): Promise<boolean> {
-  const selectors = ["default", "google", "selector1", "selector2", "k1", "mail"];
+const DEFAULT_DKIM_SELECTORS = [
+  "default",
+  "google",
+  "selector1",
+  "selector2",
+  "k1",
+  "mail",
+];
 
-  for (const selector of selectors) {
-    try {
-      const dkimDomain = `${selector}._domainkey.${domain}`;
-      const records = await resolveTxt(dkimDomain);
-      if (records.some((r) => r.join("").toLowerCase().includes("v=dkim1"))) {
-        return true;
-      }
-    } catch {
-      // Selector not found, try next
-    }
-
-    try {
-      const dkimDomain = `${selector}._domainkey.${domain}`;
-      await resolveCname(dkimDomain);
+async function checkDkimAtSelector(
+  domain: string,
+  selector: string
+): Promise<boolean> {
+  try {
+    const dkimDomain = `${selector}._domainkey.${domain}`;
+    const records = await resolveTxt(dkimDomain);
+    if (records.some((r) => r.join("").toLowerCase().includes("v=dkim1"))) {
       return true;
-    } catch {
-      // CNAME not found, try next
+    }
+  } catch {
+    // TXT not found or invalid
+  }
+
+  try {
+    const dkimDomain = `${selector}._domainkey.${domain}`;
+    await resolveCname(dkimDomain);
+    return true;
+  } catch {
+    // CNAME not found
+  }
+
+  return false;
+}
+
+async function checkDKIM(
+  domain: string,
+  dkimSelector: string | null
+): Promise<boolean> {
+  const trimmed = dkimSelector?.trim();
+  if (trimmed) {
+    return checkDkimAtSelector(domain, trimmed);
+  }
+
+  for (const selector of DEFAULT_DKIM_SELECTORS) {
+    if (await checkDkimAtSelector(domain, selector)) {
+      return true;
     }
   }
 
@@ -71,7 +97,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const [spfValid, dkimValid, dmarcValid] = await Promise.all([
       checkSPF(domain.domain),
-      checkDKIM(domain.domain),
+      checkDKIM(domain.domain, domain.dkimSelector),
       checkDMARC(domain.domain),
     ]);
 
@@ -91,7 +117,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       domain: updated,
       checks: {
         spf: { valid: spfValid, record: `v=spf1 include:... ~all` },
-        dkim: { valid: dkimValid, record: `selector._domainkey.${domain.domain}` },
+        dkim: {
+          valid: dkimValid,
+          record: `${domain.dkimSelector?.trim() || "selector"}._domainkey.${domain.domain}`,
+        },
         dmarc: { valid: dmarcValid, record: `_dmarc.${domain.domain}` },
       },
     });

@@ -55,6 +55,7 @@ interface DomainWarmup {
 interface SendingDomain {
   id: string;
   domain: string;
+  dkimSelector: string | null;
   status: "PENDING" | "VERIFIED" | "FAILED" | "PAUSED";
   spfValid: boolean;
   dkimValid: boolean;
@@ -94,7 +95,11 @@ const SPF_INCLUDES: Record<string, string> = {
   POSTMARK: "include:spf.mtasv.net",
 };
 
-function getDnsRecords(domain: string) {
+function getDnsRecords(domain: string, dkimSelector?: string | null) {
+  const sel = dkimSelector?.trim();
+  const dkimHost = sel
+    ? `${sel}._domainkey.${domain}`
+    : `<selector>._domainkey.${domain}`;
   return {
     spf: {
       type: "TXT",
@@ -104,9 +109,11 @@ function getDnsRecords(domain: string) {
     },
     dkim: {
       type: "TXT / CNAME",
-      host: `<selector>._domainkey.${domain}`,
+      host: dkimHost,
       value: "Provided by your email provider (SendGrid, AWS SES, etc.)",
-      note: 'The selector name (e.g. "s1", "k1", "default") and value come from your provider\'s domain authentication settings.',
+      note: sel
+        ? "Host name uses your saved DKIM selector. Value still comes from your mail host’s DKIM / domain authentication screen."
+        : 'Set the DKIM selector below (from your mail host), then use that name in DNS: <selector>._domainkey — e.g. "k1", "default".',
     },
     dmarc: {
       type: "TXT",
@@ -141,9 +148,90 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function DkimSelectorEditor({
+  domain,
+  onSaved,
+}: {
+  domain: SendingDomain;
+  onSaved: () => Promise<void>;
+}) {
+  const [value, setValue] = useState(domain.dkimSelector ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setValue(domain.dkimSelector ?? "");
+  }, [domain.dkimSelector]);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const trimmed = value.trim();
+      const res = await fetch(`/api/v1/settings/domains/${domain.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dkimSelector: trimmed === "" ? null : trimmed,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(
+          typeof json.error === "string" ? json.error : "Failed to save selector"
+        );
+        return;
+      }
+      await onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const dirty = value.trim() !== (domain.dkimSelector ?? "").trim();
+
+  return (
+    <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-2">
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+        <div className="flex-1 space-y-1.5">
+          <Label htmlFor={`dkim-${domain.id}`} className="text-xs font-medium">
+            DKIM selector
+          </Label>
+          <Input
+            id={`dkim-${domain.id}`}
+            placeholder="e.g. default, k1, s1 — from your mail host"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="font-mono text-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            Left-hand label before{" "}
+            <code className="text-[0.7rem]">._domainkey</code>. Required for
+            DNS verification if your host does not use a common selector.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          onClick={handleSave}
+          disabled={saving || !dirty}
+        >
+          {saving ? (
+            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+          ) : null}
+          Save selector
+        </Button>
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
 function DnsSetupGuide({ domain }: { domain: SendingDomain }) {
   const [open, setOpen] = useState(domain.status === "PENDING");
-  const records = getDnsRecords(domain.domain);
+  const records = getDnsRecords(domain.domain, domain.dkimSelector);
   const hasMissing = !domain.spfValid || !domain.dkimValid || !domain.dmarcValid;
 
   if (!hasMissing) return null;
@@ -501,6 +589,7 @@ export default function DomainsPage() {
                       )}
                     </div>
                   </div>
+                  <DkimSelectorEditor domain={d} onSaved={fetchDomains} />
                 </CardContent>
                 <DnsSetupGuide domain={d} />
               </Card>

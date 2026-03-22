@@ -5,9 +5,29 @@ import { authenticateApi, jsonResponse, errorResponse } from "@/lib/api-auth";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
+/** DKIM selector label (left of ._domainkey); letters, digits, dots, hyphens, underscores. */
+const dkimSelectorSchema = z
+  .string()
+  .trim()
+  .max(63)
+  .regex(
+    /^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$/,
+    "Invalid DKIM selector format"
+  );
+
 const updateDomainSchema = z.object({
   maxDailyVolume: z.number().int().positive().optional(),
   status: z.enum(["PENDING", "VERIFIED", "FAILED", "PAUSED"]).optional(),
+  dkimSelector: z
+    .union([z.string(), z.null()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined) return undefined;
+      if (val === null) return null;
+      const t = val.trim();
+      if (t === "") return null;
+      return dkimSelectorSchema.parse(t);
+    }),
 });
 
 export async function GET(req: NextRequest, { params }: RouteParams) {

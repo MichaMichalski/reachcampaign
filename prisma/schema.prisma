@@ -354,6 +354,7 @@ enum DomainStatus {
 model SendingDomain {
   id         String       @id @default(cuid())
   domain     String       @unique
+  dkimSelector String?
   status     DomainStatus @default(PENDING)
   spfValid   Boolean      @default(false)
   dkimValid  Boolean      @default(false)
